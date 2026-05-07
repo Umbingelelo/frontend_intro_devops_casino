@@ -9,7 +9,7 @@ import { AuthService } from '../../services/auth.service';
   imports: [CommonModule, RouterLink, RouterLinkActive],
   template: `
     <header class="barra">
-      <a routerLink="/lobby" class="marca">♠ Casino DevOps ♦</a>
+      <a routerLink="/lobby" class="marca">♠ Casino DevOps - No se♦</a>
 
       <nav *ngIf="auth.autenticado()">
         <a routerLink="/lobby" routerLinkActive="activo">Lobby</a>
