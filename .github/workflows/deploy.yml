@@ -10,20 +10,30 @@ jobs:
       - name: Checkout del codigo
         uses: actions/checkout@v4
 
-      - name: Configurar credenciales de AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
+      - name: Configurar AWS con Limpieza Absoluta
+        run: |
+          # Limpieza forzada de comillas, textos de etiquetas y saltos de linea
+          CLEAN_KEY=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
+          CLEAN_SECRET=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
+          CLEAN_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
 
-          # Forzar limpieza interna del token para que AWS no rechace el header
-          mask-aws-account-id: 'no'
+          mkdir -p ~/.aws
+          echo "[default]" > ~/.aws/credentials
+          echo "aws_access_key_id=$CLEAN_KEY" >> ~/.aws/credentials
+          echo "aws_secret_access_key=$CLEAN_SECRET" >> ~/.aws/credentials
+          echo "aws_session_token=$CLEAN_TOKEN" >> ~/.aws/credentials
+          
+          echo "[default]" > ~/.aws/config
+          echo "region=us-east-1" >> ~/.aws/config
 
-      - name: Login en Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+          # Validar configuracion minima de entorno
+          export AWS_ACCESS_KEY_ID=$CLEAN_KEY
+          export AWS_SECRET_ACCESS_KEY=$CLEAN_SECRET
+          export AWS_SESSION_TOKEN=$CLEAN_TOKEN
+          export AWS_DEFAULT_REGION=us-east-1
+
+          # Autenticacion directa contra ECR sin pasar por extensiones bugeadas de Node
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
       - name: Build y Push de la imagen
         run: |
@@ -37,6 +47,17 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # Inyeccion y limpieza de credenciales directo en el servidor remoto
+            CLEAN_KEY=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
+            CLEAN_SECRET=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
+            CLEAN_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
+
+            mkdir -p ~/.aws
+            echo "[default]" > ~/.aws/credentials
+            echo "aws_access_key_id=$CLEAN_KEY" >> ~/.aws/credentials
+            echo "aws_secret_access_key=$CLEAN_SECRET" >> ~/.aws/credentials
+            echo "aws_session_token=$CLEAN_TOKEN" >> ~/.aws/credentials
+            
             aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
             docker stop casino-frontend || true
             docker rm casino-frontend || true
