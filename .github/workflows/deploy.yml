@@ -1,0 +1,59 @@
+name: Deploy Frontend
+on:
+  push:
+    branches:
+      - deploy
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      - name: Login, Build y Push a ECR
+        run: |
+          CLEAN_KEY=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
+          CLEAN_SECRET=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
+          CLEAN_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
+
+          export AWS_ACCESS_KEY_ID=$CLEAN_KEY
+          export AWS_SECRET_ACCESS_KEY=$CLEAN_SECRET
+          export AWS_SESSION_TOKEN=$CLEAN_TOKEN
+          export AWS_DEFAULT_REGION=us-east-1
+
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 541185687187.dkr.ecr.us-east-1.amazonaws.com
+          docker build -t 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest .
+          docker push 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+
+      - name: Deploy en EC2 Frontend via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 1. Auto-instalación de Docker en el servidor si no existe
+            if ! command -v docker &> /dev/null; then
+              echo "Instalando Docker de forma automatica..."
+              sudo dnf update -y && sudo dnf install -y docker
+              sudo systemctl enable --now docker
+              sudo usermod -aG docker ec2-user
+            fi
+
+            # 2. Configurar credenciales AWS en el servidor remoto
+            CLEAN_KEY=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
+            CLEAN_SECRET=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
+            CLEAN_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
+
+            mkdir -p ~/.aws
+            echo "[default]" > ~/.aws/credentials
+            echo "aws_access_key_id=$CLEAN_KEY" >> ~/.aws/credentials
+            echo "aws_secret_access_key=$CLEAN_SECRET" >> ~/.aws/credentials
+            echo "aws_session_token=$CLEAN_TOKEN" >> ~/.aws/credentials
+
+            # 3. Descarga y arranque del contenedor usando privilegios sudo inmediatos
+            aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin 541185687187.dkr.ecr.us-east-1.amazonaws.com
+            sudo docker stop casino-frontend || true
+            sudo docker rm casino-frontend || true
+            sudo docker pull 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+            sudo docker run -d -p 80:8080 --name casino-frontend -e BACKEND_HOST=${{ secrets.BACKEND_HOST_PRIVATE }} 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
