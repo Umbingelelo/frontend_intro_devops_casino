@@ -3,14 +3,12 @@ on:
   push:
     branches:
       - deploy
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout del codigo
         uses: actions/checkout@v3
-
       - name: Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -18,16 +16,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
-
       - name: Login en Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build y Push a ECR
+      - name: Build y Push de la imagen
         run: |
           docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest .
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
-
       - name: Deploy en EC2 Frontend via SSH
         uses: appleboy/ssh-action@master
         with:
