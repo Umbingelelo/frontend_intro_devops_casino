@@ -10,24 +10,24 @@ jobs:
       - name: Checkout del codigo
         uses: actions/checkout@v4
 
-      - name: Autenticacion, Build y Push a ECR
+      - name: Login, Build y Push a ECR
         run: |
-          # 1. Limpieza absoluta de caracteres, comillas y espacios ocultos en los secretos
-          export AWS_ACCESS_KEY_ID=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
-          export AWS_SECRET_ACCESS_KEY=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
-          export AWS_SESSION_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
-          export AWS_ACCOUNT_ID=$(echo "${{ secrets.AWS_ACCOUNT_ID }}" | tr -d '\r\n ')
+          # 1. Limpieza forzada de residuos en tus secretos de AWS
+          CLEAN_KEY=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
+          CLEAN_SECRET=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
+          CLEAN_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
+
+          export AWS_ACCESS_KEY_ID=$CLEAN_KEY
+          export AWS_SECRET_ACCESS_KEY=$CLEAN_SECRET
+          export AWS_SESSION_TOKEN=$CLEAN_TOKEN
           export AWS_DEFAULT_REGION=us-east-1
 
-          # 2. Asegurar que el repositorio exista en AWS por si se borro al reiniciar el lab
-          aws ecr create-repository --repository-name casino-frontend --region us-east-1 || true
+          # 2. Login directo usando tu ID de cuenta real: 541185687187
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 541185687187.dkr.ecr.us-east-1.amazonaws.com
 
-          # 3. Login directo en el registro de AWS
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
-
-          # 4. Construccion y subida de la aplicacion
-          docker build -t $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest .
-          docker push $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+          # 3. Construccion y Push usando el ID real
+          docker build -t 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest .
+          docker push 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
 
       - name: Deploy en EC2 Frontend via SSH
         uses: appleboy/ssh-action@master
@@ -36,15 +36,18 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Limpieza e inyeccion segura dentro del servidor destino
-            export AWS_ACCESS_KEY_ID=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
-            export AWS_SECRET_ACCESS_KEY=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
-            export AWS_SESSION_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
-            export AWS_ACCOUNT_ID=$(echo "${{ secrets.AWS_ACCOUNT_ID }}" | tr -d '\r\n ')
-            export BACKEND_HOST_PRIVATE=$(echo "${{ secrets.BACKEND_HOST_PRIVATE }}" | tr -d '\r\n ')
+            # Limpieza forzada de credenciales dentro del servidor remoto
+            CLEAN_KEY=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | sed -e 's/aws_access_key_id=//g' -e 's/"//g' | tr -d '\r\n ')
+            CLEAN_SECRET=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | sed -e 's/aws_secret_access_key=//g' -e 's/"//g' | tr -d '\r\n ')
+            CLEAN_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | sed -e 's/aws_session_token=//g' -e 's/"//g' | tr -d '\r\n ')
 
-            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+            export AWS_ACCESS_KEY_ID=$CLEAN_KEY
+            export AWS_SECRET_ACCESS_KEY=$CLEAN_SECRET
+            export AWS_SESSION_TOKEN=$CLEAN_TOKEN
+            export AWS_DEFAULT_REGION=us-east-1
+
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 541185687187.dkr.ecr.us-east-1.amazonaws.com
             docker stop casino-frontend || true
             docker rm casino-frontend || true
-            docker pull $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
-            docker run -d -p 80:8080 --name casino-frontend -e BACKEND_HOST=$BACKEND_HOST_PRIVATE $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+            docker pull 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+            docker run -d -p 80:8080 --name casino-frontend -e BACKEND_HOST=${{ secrets.BACKEND_HOST_PRIVATE }} 541185687187.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
