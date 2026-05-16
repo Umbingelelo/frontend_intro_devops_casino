@@ -1,19 +1,42 @@
-- name: Deploy en EC2 Frontend via SSH
+name: Deploy Frontend
+on:
+  push:
+    branches:
+      - deploy
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v3
+
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Login en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build y Push a ECR
+        run: |
+          docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest .
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+
+      - name: Deploy en EC2 Frontend via SSH
         uses: appleboy/ssh-action@master
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          BACKEND_HOST_PRIVATE: ${{ secrets.BACKEND_HOST_PRIVATE }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_SESSION_TOKEN,AWS_ACCOUNT_ID,BACKEND_HOST_PRIVATE
           script: |
-            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
             docker stop casino-frontend || true
             docker rm casino-frontend || true
-            docker pull $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
-            docker run -d -p 80:8080 --name casino-frontend -e BACKEND_HOST=$BACKEND_HOST_PRIVATE $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+            docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+            docker run -d -p 80:8080 --name casino-frontend -e BACKEND_HOST=${{ secrets.BACKEND_HOST_PRIVATE }} ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
