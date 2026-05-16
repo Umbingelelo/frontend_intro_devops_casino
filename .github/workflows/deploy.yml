@@ -10,18 +10,19 @@ jobs:
       - name: Checkout del codigo
         uses: actions/checkout@v4
 
-      - name: Build, Login y Push directo a ECR
+      - name: Configurar AWS manual sin extensiones
         run: |
-          # Limpieza forzada de caracteres ocultos, saltos de linea y espacios en el token
-          export AWS_ACCESS_KEY_ID=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | tr -d '\r\n ')
-          export AWS_SECRET_ACCESS_KEY=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | tr -d '\r\n ')
-          export AWS_SESSION_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | tr -d '\r\n ')
-          export AWS_DEFAULT_REGION=us-east-1
+          mkdir -p ~/.aws
+          echo "[default]" > ~/.aws/credentials
+          echo "aws_access_key_id=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | tr -d '\r\n ')" >> ~/.aws/credentials
+          echo "aws_secret_access_key=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | tr -d '\r\n ')" >> ~/.aws/credentials
+          echo "aws_session_token=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | tr -d '\r\n ')" >> ~/.aws/credentials
+          echo "[default]" > ~/.aws/config
+          echo "region=us-east-1" >> ~/.aws/config
 
-          # Autenticacion manual directa saltándose la extensión bugeada
+      - name: Login, Build y Push a ECR
+        run: |
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-
-          # Construcción y subida de la imagen
           docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest .
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
 
@@ -32,11 +33,11 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Limpieza forzada de credenciales dentro de la máquina EC2
-            export AWS_ACCESS_KEY_ID=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | tr -d '\r\n ')
-            export AWS_SECRET_ACCESS_KEY=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | tr -d '\r\n ')
-            export AWS_SESSION_TOKEN=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | tr -d '\r\n ')
-
+            mkdir -p ~/.aws
+            echo "[default]" > ~/.aws/credentials
+            echo "aws_access_key_id=$(echo "${{ secrets.AWS_ACCESS_KEY_ID }}" | tr -d '\r\n ')" >> ~/.aws/credentials
+            echo "aws_secret_access_key=$(echo "${{ secrets.AWS_SECRET_ACCESS_KEY }}" | tr -d '\r\n ')" >> ~/.aws/credentials
+            echo "aws_session_token=$(echo "${{ secrets.AWS_SESSION_TOKEN }}" | tr -d '\r\n ')" >> ~/.aws/credentials
             aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
             docker stop casino-frontend || true
             docker rm casino-frontend || true
