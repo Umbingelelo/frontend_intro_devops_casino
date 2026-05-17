@@ -1,23 +1,20 @@
 server {
     listen 8080;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
+    server_name localhost;
 
     location / {
+        root /usr/share/nginx/html;
+        index index.html index.htm;
         try_files $uri $uri/ /index.html;
     }
 
     location /api/ {
-        proxy_pass http://${BACKEND_HOST}:3000/;
+        # Esto le dice a Nginx: toma todo lo que vaya a /api/ y mándaselo al backend por el puerto 3000
+        proxy_pass http://${BACKEND_HOST};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|ico)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+        proxy_cache_bypass $http_upgrade;
     }
 }
