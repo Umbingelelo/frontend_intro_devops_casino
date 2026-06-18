@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: casino-frontend
+  labels:
+    app: casino-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: casino-frontend
+  template:
+    metadata:
+      labels:
+        app: casino-frontend
+    spec:
+      containers:
+        - name: casino-frontend
+          # Asegúrate de usar la imagen correcta desde ECR
+          image: 511249208390.dkr.ecr.us-east-1.amazonaws.com/casino-frontend:latest
+          ports:
+            - containerPort: 8080 # Puerto interno de Nginx
+          # El frontend no necesita variables de entorno de conexión, 
+          # ya que el enrutamiento se hace vía nginx.conf.
+          livenessProbe:
+            httpGet:
+              path: / # O la ruta que defina tu frontend como healthy
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
